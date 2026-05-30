@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PNG Fade Tool</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #141414;
+    color: #d4d4d4;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2rem 1rem 0;
+  }
+
+  /* ── header ── */
+  .header {
+    width: 100%; max-width: 1200px;
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 2rem; flex-shrink: 0;
+  }
+  h1 { font-size: 1.4rem; font-weight: 500; color: #fff; letter-spacing: -0.01em; }
+  .kofi-link {
+    display: flex; align-items: center; gap: 7px;
+    text-decoration: none; color: #bbb; font-size: 13px;
+    padding: 6px 12px; border: 0.5px solid #383838; border-radius: 8px;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .kofi-link:hover { border-color: #666; color: #ddd; }
+  .kofi-link svg { flex-shrink: 0; }
+
+  /* ── no-JS warning (hidden when JS runs) ── */
+  #no-js-banner {
+    width: 100%; max-width: 600px;
+    background: #2a1a1a; border: 1px solid #7a2a2a; border-radius: 12px;
+    padding: 2rem; text-align: center;
+  }
+  #no-js-banner h2 { font-size: 1.1rem; margin-bottom: 0.75rem; color: #ffaaaa; }
+  #no-js-banner p  { font-size: 13px; line-height: 1.6; color: #c88080; }
+
+  /* ── compat error banner (shown by JS if APIs missing) ── */
+  #error-banner {
+    display: none; width: 100%; max-width: 600px;
+    background: #2a1a1a; border: 1px solid #7a2a2a; border-radius: 12px;
+    padding: 2rem; text-align: center;
+  }
+  #error-banner h2 { font-size: 1.1rem; margin-bottom: 0.75rem; color: #ffaaaa; }
+  #error-banner p  { font-size: 13px; line-height: 1.6; color: #c88080; }
+  #error-banner ul { list-style: none; margin-top: 0.75rem; }
+  #error-banner li { font-size: 13px; color: #c88080; padding: 2px 0; }
+
+  /* ── layout: side-by-side on wide, stacked on narrow ── */
+  .layout {
+    width: 100%; max-width: 1200px;
+    display: flex; gap: 1.5rem;
+    align-items: flex-start; justify-content: center;
+    flex: 1; /* pushes footer down */
+  }
+
+  /* main column */
+  .main-col {
+    width: 100%; max-width: 680px;
+    flex-shrink: 1; display: flex; flex-direction: column; gap: 1rem;
+    padding-bottom: 2rem;
+  }
+
+  /* controls — flex-col with gap so cards have vertical spacing */
+  .controls-section { display: none; flex-direction: column; gap: 1rem; }
+
+  /* sidebar */
+  .side-col {
+    width: 230px; flex-shrink: 0;
+    display: flex; flex-direction: column; gap: 1rem;
+  }
+
+  /* ── cards ── */
+  .card {
+    background: #1e1e1e; border: 0.5px solid #303030;
+    border-radius: 12px; padding: 1.25rem 1.5rem;
+  }
+
+  /* ── drop zone ── */
+  .drop-zone {
+    border: 1.5px dashed #3a3a3a; border-radius: 12px;
+    padding: 3rem 2rem; text-align: center; cursor: pointer;
+    transition: background 0.15s, border-color 0.15s; background: #181818;
+  }
+  .drop-zone:hover    { background: #1c1c1c; border-color: #555; }
+  .drop-zone.dragover { background: #1c1c1c; border-color: #777; }
+  .drop-zone svg   { display: block; margin: 0 auto 0.75rem; opacity: 0.45; }
+  .drop-zone p     { font-size: 15px; color: #e0e0e0; }
+  .drop-zone small { font-size: 12px; color: #a0a0a0; display: block; margin-top: 4px; }
+
+  /* ── section labels ── */
+  .section-label {
+    font-size: 11px; font-weight: 700; color: #c0c0c0;
+    text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 0.3rem;
+  }
+  .section-desc { font-size: 12px; color: #a0a0a0; margin-bottom: 1rem; line-height: 1.5; }
+
+  /* ── slider rows ── */
+  .slider-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .slider-row:last-child { margin-bottom: 0; }
+  .slider-row label { font-size: 13px; color: #d0d0d0; min-width: 90px; }
+  .slider-row input[type=range] {
+    flex: 1; -webkit-appearance: none; appearance: none;
+    height: 4px; background: #333; border-radius: 2px; outline: none;
+    cursor: pointer; min-width: 0;
+  }
+  .slider-row input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 16px; height: 16px;
+    border-radius: 50%; background: #e0e0e0; cursor: pointer;
+  }
+  .slider-row input[type=range]::-moz-range-thumb {
+    width: 16px; height: 16px; border-radius: 50%;
+    background: #e0e0e0; border: none; cursor: pointer;
+  }
+  .slider-row input[type=number] {
+    width: 56px; background: #141414; border: 0.5px solid #3a3a3a;
+    border-radius: 6px; color: #d4d4d4; font-size: 13px; font-weight: 500;
+    padding: 3px 6px; text-align: right; outline: none;
+    -moz-appearance: textfield; appearance: textfield;
+  }
+  .slider-row input[type=number]::-webkit-inner-spin-button,
+  .slider-row input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
+  .slider-row input[type=number]:focus { border-color: #777; }
+  .slider-row .unit { font-size: 12px; color: #a0a0a0; width: 14px; flex-shrink: 0; }
+
+  /* ── shape toggle ── */
+  .shape-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .shape-row label { font-size: 13px; color: #d0d0d0; min-width: 90px; }
+  .shape-toggle { display: flex; border: 0.5px solid #3a3a3a; border-radius: 7px; overflow: hidden; }
+  .shape-toggle button {
+    background: none; border: none; color: #c0c0c0; font-size: 13px;
+    padding: 5px 14px; cursor: pointer; display: flex; align-items: center;
+    gap: 6px; transition: background 0.1s, color 0.1s;
+  }
+  .shape-toggle button:first-child { border-right: 0.5px solid #3a3a3a; }
+  .shape-toggle button.active { background: #e0e0e0; color: #111; }
+  .shape-toggle button svg { flex-shrink: 0; }
+
+  /* ── colour swatches ── */
+  .color-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .color-row label { font-size: 13px; color: #d0d0d0; min-width: 90px; }
+  .swatches { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .swatch {
+    width: 26px; height: 26px; border-radius: 50%; cursor: pointer;
+    border: 2px solid transparent; transition: border-color 0.1s; flex-shrink: 0;
+  }
+  .swatch:hover  { border-color: #777; }
+  .swatch.active { border-color: #ccc; }
+  .swatch.checker {
+    background: repeating-conic-gradient(#555 0% 25%, #2a2a2a 0% 50%) 0 0 / 12px 12px;
+  }
+
+  /* global color input base (only applies outside the pill) */
+  input[type=color] {
+    width: 26px; height: 26px; border-radius: 50%; border: none;
+    padding: 0; cursor: pointer; background: none; flex-shrink: 0; display: block;
+    color-scheme: dark; /* dark-themed native picker dialog */
+  }
+  input[type=color]::-webkit-color-swatch-wrapper { padding: 0; border-radius: 50%; overflow: hidden; }
+  input[type=color]::-webkit-color-swatch { border: none; border-radius: 50%; }
+  input[type=color]::-moz-color-swatch { border: none; border-radius: 50%; }
+
+  /* custom colour pill */
+  .custom-color-wrap {
+    display: flex; align-items: center; gap: 5px;
+    background: #2a2a2a; border: 1px solid #484848; border-radius: 20px;
+    padding: 0 10px 0 0; cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    flex-shrink: 0; height: 30px; overflow: hidden;
+  }
+  .custom-color-wrap:hover  { border-color: #888; background: #333; }
+  .custom-color-wrap.active { border-color: #ddd; background: #383838; }
+  .custom-color-wrap input[type=color] {
+    width: 30px; height: 30px; border-radius: 0; flex-shrink: 0;
+    border-right: 1px solid #484040;
+  }
+  .custom-color-wrap input[type=color]::-webkit-color-swatch-wrapper { padding: 0; border-radius: 0; }
+  .custom-color-wrap input[type=color]::-webkit-color-swatch { border: none; border-radius: 0; }
+  .custom-color-label {
+    font-size: 12px; color: #c8c8c8; white-space: nowrap; pointer-events: none; user-select: none;
+  }
+  .custom-color-wrap.active .custom-color-label { color: #fff; }
+
+  /* ── full-res toggle switch ── */
+  .check-row { display: flex; align-items: center; gap: 10px; margin-top: 1rem; }
+  .check-row input[type=checkbox] { position: absolute; opacity: 0; width: 0; height: 0; }
+  .toggle-track {
+    position: relative; width: 36px; height: 20px; flex-shrink: 0;
+    background: #333; border-radius: 10px; cursor: pointer;
+    transition: background 0.2s; border: 1px solid #444;
+  }
+  input[type=checkbox]:checked + .toggle-track { background: #c0c0c0; border-color: #c0c0c0; }
+  .toggle-track::after {
+    content: ''; position: absolute; top: 2px; left: 2px;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: #888; transition: transform 0.2s, background 0.2s;
+  }
+  input[type=checkbox]:checked + .toggle-track::after { transform: translateX(16px); background: #111; }
+  .toggle-label {
+    font-size: 13px; color: #d0d0d0; cursor: pointer; user-select: none;
+    display: flex; align-items: center; gap: 5px;
+  }
+
+  /* ── tooltip ── */
+  .tooltip-wrap { position: relative; display: inline-flex; }
+  .tooltip-icon {
+    width: 15px; height: 15px; border-radius: 50%;
+    background: #2e2e2e; border: 1px solid #4a4a4a;
+    color: #999; font-size: 10px; font-style: italic; font-weight: 700;
+    font-family: Georgia, serif;
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: default; flex-shrink: 0; line-height: 1;
+  }
+  .tooltip-box {
+    display: none; position: absolute; bottom: calc(100% + 8px); left: 50%;
+    transform: translateX(-50%);
+    background: #2a2a2a; border: 0.5px solid #444; border-radius: 8px;
+    padding: 8px 10px; width: 220px;
+    font-size: 12px; color: #c0c0c0; line-height: 1.5;
+    white-space: normal; z-index: 10; pointer-events: none;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  }
+  .tooltip-box::after {
+    content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+    border: 5px solid transparent; border-top-color: #444;
+  }
+  .tooltip-wrap:hover .tooltip-box { display: block; }
+
+  /* ── preview ── */
+  #preview-wrap { display: none; border-radius: 12px; overflow: hidden; border: 0.5px solid #303030; }
+  /* preview is now a canvas element, not an img */
+  #preview-canvas-display { width: 100%; display: block; }
+
+  /* ── download ── */
+  button#download-btn {
+    display: none; width: 100%; padding: 0.75rem;
+    background: #e0e0e0; color: #111; border: none; border-radius: 8px;
+    font-size: 15px; font-weight: 500; cursor: pointer; transition: background 0.15s;
+  }
+  button#download-btn:hover    { background: #bbb; }
+  button#download-btn:disabled { background: #444; color: #777; cursor: not-allowed; }
+
+  /* ── tips ── */
+  .tips-card { font-size: 12.5px; line-height: 1.65; color: #b0b0b0; }
+  .tips-card .tip-heading {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.07em; color: #c0c0c0; margin-bottom: 0.75rem;
+  }
+  .tip { margin-bottom: 0.75rem; }
+  .tip:last-child { margin-bottom: 0; }
+  .tip strong { color: #e0e0e0; font-weight: 600; display: block; margin-bottom: 2px; }
+
+  /* ── footer ── */
+  .footer {
+    width: 100%; max-width: 1200px;
+    margin-top: auto; padding: 1.25rem 0 2rem;
+    border-top: 0.5px solid #2a2a2a;
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 0.5rem; flex-shrink: 0;
+  }
+  .footer-left { font-size: 12px; color: #666; }
+  .footer-right { display: flex; gap: 1rem; }
+  .footer-link {
+    font-size: 12px; color: #777; text-decoration: none;
+    display: flex; align-items: center; gap: 5px; transition: color 0.15s;
+  }
+  .footer-link:hover { color: #ccc; }
+  .footer-link svg { flex-shrink: 0; }
+
+  /* hidden canvases used for processing */
+  #canvas, #thumb-canvas { display: none; }
+
+  /* ── responsive ── */
+  @media (max-width: 820px) {
+    .layout { flex-direction: column; align-items: center; }
+    .side-col { width: 100%; max-width: 680px; }
+  }
+</style>
+</head>
+<body>
+
+<noscript>
+  <style>#main-ui, .header { display: none !important; }</style>
+  <div style="margin:4rem auto;max-width:500px;background:#2a1a1a;border:1px solid #7a2a2a;border-radius:12px;padding:2rem;text-align:center;">
+    <h2 style="color:#ffaaaa;margin-bottom:0.75rem;">JavaScript required</h2>
+    <p style="color:#c88080;font-size:13px;line-height:1.6;">PNG Fade Tool uses JavaScript for image processing. Please enable JavaScript in your browser settings and reload the page.</p>
+  </div>
+</noscript>
+
+<!-- header -->
+<div class="header">
+  <h1>PNG Fade Tool</h1>
+  <a class="kofi-link" href="https://ko-fi.com/shefski55555" target="_blank" rel="noopener noreferrer">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M18 8h1a4 4 0 0 1 0 8h-1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      <line x1="6" y1="1" x2="6" y2="4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <line x1="10" y1="1" x2="10" y2="4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <line x1="14" y1="1" x2="14" y2="4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </svg>
+    Buy me a coffee
+  </a>
+</div>
+
+<!-- compat error banner (populated by JS) -->
+<div id="error-banner" role="alert">
+  <h2>⚠ Your browser doesn't support this tool</h2>
+  <p>PNG Fade Tool requires features unavailable in your current browser:</p>
+  <ul id="error-list"></ul>
+  <p style="margin-top:1rem;">Please try an up-to-date version of Chrome, Firefox, Edge, or Safari.</p>
+</div>
+
+<!-- main layout -->
+<div class="layout" id="main-ui">
+
+  <!-- centre column -->
+  <div class="main-col">
+
+    <div class="drop-zone" id="drop-zone" role="button" tabindex="0"
+         aria-label="Upload image — click or drag and drop"
+         onclick="document.getElementById('file-in').click()">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/>
+        <line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+      <p>Drop an image here, or click to upload</p>
+      <small>PNG, JPG, WebP — exported as PNG with transparency</small>
+    </div>
+    <input type="file" id="file-in" accept="image/*" aria-label="Choose image file" style="position:absolute;opacity:0;width:0;height:0;pointer-events:none">
+
+    <!-- controls -->
+    <div class="controls-section" id="controls">
+
+      <!-- Preview background -->
+      <div class="card">
+        <div class="section-label">Preview background</div>
+        <div class="section-desc">Only visible in preview — not included in the exported PNG</div>
+        <div class="color-row">
+          <label>Background</label>
+          <div class="swatches" role="radiogroup" aria-label="Preview background colour">
+            <div class="swatch checker active" data-color="checker" title="Checkerboard" role="radio" aria-checked="true" tabindex="0"></div>
+            <div class="swatch" style="background:#ffffff" data-color="#ffffff" title="White" role="radio" aria-checked="false" tabindex="0"></div>
+            <div class="swatch" style="background:#000000" data-color="#000000" title="Black" role="radio" aria-checked="false" tabindex="0"></div>
+            <div class="swatch" style="background:#ff0000" data-color="#ff0000" title="Red"   role="radio" aria-checked="false" tabindex="0"></div>
+            <div class="swatch" style="background:#00aaff" data-color="#00aaff" title="Blue"  role="radio" aria-checked="false" tabindex="0"></div>
+            <div class="swatch" style="background:#22cc66" data-color="#22cc66" title="Green" role="radio" aria-checked="false" tabindex="0"></div>
+            <div class="custom-color-wrap" title="Pick a custom background colour" role="radio" aria-checked="false" tabindex="0">
+              <input type="color" id="custom-color" value="#ff8800" tabindex="-1">
+              <span class="custom-color-label">Custom</span>
+            </div>
+          </div>
+        </div>
+        <div class="check-row">
+          <input type="checkbox" id="fullres-toggle">
+          <label class="toggle-track" for="fullres-toggle"></label>
+          <label class="toggle-label" for="fullres-toggle">
+            Full resolution preview
+            <span class="tooltip-wrap">
+              <span class="tooltip-icon" aria-label="More info">i</span>
+              <span class="tooltip-box" role="tooltip">
+                By default, the live preview uses a downscaled copy for speed — the downloaded PNG is always full resolution.<br><br>
+                Enable this for pixel-accurate feedback while editing. May be slow on large images.
+              </span>
+            </span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Global opacity -->
+      <div class="card">
+        <div class="section-label">Global opacity</div>
+        <div class="section-desc">Scales the transparency of the entire image uniformly</div>
+        <div class="slider-row">
+          <label for="global-opacity">Opacity</label>
+          <input type="range"  id="global-opacity"     min="0" max="100" value="100" step="1">
+          <input type="number" id="global-opacity-num" min="0" max="100" value="100">
+          <span class="unit">%</span>
+        </div>
+      </div>
+
+      <!-- Inner fade -->
+      <div class="card">
+        <div class="section-label">Inner fade</div>
+        <div class="section-desc">Edges fade inward — transparent at the border, opaque toward center</div>
+        <div class="shape-row">
+          <label>Shape</label>
+          <div class="shape-toggle" role="group" aria-label="Inner fade shape">
+            <button class="active" id="inner-shape-square" onclick="setShape('inner','square')" type="button">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1" y="1" width="12" height="12" rx="1"/></svg>
+              Square
+            </button>
+            <button id="inner-shape-circle" onclick="setShape('inner','circle')" type="button">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="7" cy="7" r="6"/></svg>
+              Circle
+            </button>
+          </div>
+        </div>
+        <div class="slider-row">
+          <label for="inner-size">Fade size</label>
+          <input type="range"  id="inner-size"     min="0" max="100" value="20" step="1">
+          <input type="number" id="inner-size-num" min="0" max="100" value="20">
+          <span class="unit">%</span>
+        </div>
+        <div class="slider-row">
+          <label for="inner-soft">Softness</label>
+          <input type="range"  id="inner-soft"     min="1" max="100" value="50" step="1">
+          <input type="number" id="inner-soft-num" min="1" max="100" value="50">
+          <span class="unit">%</span>
+        </div>
+      </div>
+
+      <!-- Outer fade -->
+      <div class="card">
+        <div class="section-label">Outer fade</div>
+        <div class="section-desc">Center fades outward — transparent in the middle, opaque at edges</div>
+        <div class="shape-row">
+          <label>Shape</label>
+          <div class="shape-toggle" role="group" aria-label="Outer fade shape">
+            <button class="active" id="outer-shape-square" onclick="setShape('outer','square')" type="button">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1" y="1" width="12" height="12" rx="1"/></svg>
+              Square
+            </button>
+            <button id="outer-shape-circle" onclick="setShape('outer','circle')" type="button">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="7" cy="7" r="6"/></svg>
+              Circle
+            </button>
+          </div>
+        </div>
+        <div class="slider-row">
+          <label for="outer-size">Fade size</label>
+          <input type="range"  id="outer-size"     min="0" max="100" value="0" step="1">
+          <input type="number" id="outer-size-num" min="0" max="100" value="0">
+          <span class="unit">%</span>
+        </div>
+        <div class="slider-row">
+          <label for="outer-soft">Softness</label>
+          <input type="range"  id="outer-soft"     min="1" max="100" value="50" step="1">
+          <input type="number" id="outer-soft-num" min="1" max="100" value="50">
+          <span class="unit">%</span>
+        </div>
+      </div>
+
+    </div><!-- /controls-section -->
+
+    <!-- preview is a canvas directly — no img bounce via toDataURL -->
+    <div id="preview-wrap">
+      <canvas id="preview-canvas-display"></canvas>
+    </div>
+
+    <!-- hidden processing canvases -->
+    <canvas id="canvas"></canvas>
+    <canvas id="thumb-canvas"></canvas>
+
+    <button id="download-btn" type="button">⬇ Download PNG</button>
+
+  </div><!-- /main-col -->
+
+  <!-- sidebar: tips -->
+  <div class="side-col">
+    <div class="card tips-card">
+      <div class="tip-heading">Tips</div>
+      <div class="tip">
+        <strong>Soft, dreamy fade</strong>
+        Set both Size and Softness to 70–100%. Size controls how deep the fade reaches; Softness alone won't create a wide fade.
+      </div>
+      <div class="tip">
+        <strong>Hard vignette</strong>
+        Size 15–35%, Softness 5–20%. Keeps most of the image sharp with a tight border.
+      </div>
+      <div class="tip">
+        <strong>Size vs Softness</strong>
+        Size = how far the fade band reaches inward. Softness = how gradually it transitions. Both need to be high for a wide, gentle fade.
+      </div>
+      <div class="tip">
+        <strong>Ring / halo effect</strong>
+        Enable both Inner and Outer fade. The image becomes transparent at the edges and the center, leaving an opaque ring.
+      </div>
+      <div class="tip">
+        <strong>Circle on non-square images</strong>
+        The fade will be elliptical. Use Square shape for equal fade depth on all four sides.
+      </div>
+      <div class="tip">
+        <strong>Global opacity</strong>
+        Uniformly scales every pixel's alpha — useful for watermark overlays or compositing.
+      </div>
+      <div class="tip">
+        <strong>Preview resolution</strong>
+        By default, the live preview uses a downscaled copy for speed. Enable Full resolution preview for pixel-accurate feedback. The downloaded file is always full resolution.
+      </div>
+    </div>
+  </div>
+
+</div><!-- /layout -->
+
+<!-- footer -->
+<div class="footer">
+  <span class="footer-left">Written by Claude</span>
+  <div class="footer-right">
+    <a class="footer-link" href="https://github.com/placeholder/png-fade-tool" target="_blank" rel="noopener noreferrer">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
+      </svg>
+      Source code
+    </a>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// BROWSER COMPATIBILITY CHECK
+// ─────────────────────────────────────────────────────────────────────────────
+(function() {
+  var issues = [];
+  var c = document.createElement('canvas');
+  if (!c.getContext) {
+    issues.push('Canvas API (required for image processing)');
+  } else {
+    var testCtx = c.getContext('2d');
+    if (!testCtx) {
+      issues.push('Canvas 2D context');
+    } else {
+      try { testCtx.getImageData(0, 0, 1, 1); }
+      catch(e) { issues.push('Canvas getImageData (may be blocked by browser privacy settings)'); }
+    }
+    if (typeof c.toBlob !== 'function') issues.push('Canvas toBlob (required for PNG export)');
+  }
+  if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function')
+    issues.push('Object URL API (required to load images)');
+  if (typeof File === 'undefined') issues.push('File API');
+
+  if (issues.length) {
+    document.getElementById('error-banner').style.display = 'block';
+    document.getElementById('main-ui').style.display    = 'none';
+    var list = document.getElementById('error-list');
+    issues.forEach(function(msg) {
+      var li = document.createElement('li');
+      li.textContent = '• ' + msg;
+      list.appendChild(li);
+    });
+    return; // stop all further JS execution
+  }
+})();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ELEMENT REFERENCES
+// ─────────────────────────────────────────────────────────────────────────────
+var dropZone     = document.getElementById('drop-zone');
+var fileIn       = document.getElementById('file-in');
+var controls     = document.getElementById('controls');
+var previewWrap  = document.getElementById('preview-wrap');
+var dispCanvas   = document.getElementById('preview-canvas-display'); // shown to user
+var dispCtx      = dispCanvas.getContext('2d');
+var canvas       = document.getElementById('canvas');       // full-res processing canvas
+var ctx          = canvas.getContext('2d');
+var thumbCanvas  = document.getElementById('thumb-canvas'); // persistent low-res source copy
+var thumbCtx     = thumbCanvas.getContext('2d');
+var scratchCanvas = document.createElement('canvas');       // reused scratch for low-res fading
+var scratchCtx   = scratchCanvas.getContext('2d');
+var downloadBtn  = document.getElementById('download-btn');
+var fullresChk   = document.getElementById('fullres-toggle');
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────────────────────────────────────
+var img        = null;
+var bgColor    = 'checker';
+var innerShape = 'square';
+var outerShape = 'square';
+var lastParams = null;
+var PREVIEW_MAX = 800; // max px on longest side for low-res thumb
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DEBOUNCE
+// ─────────────────────────────────────────────────────────────────────────────
+var renderTimer = null;
+function scheduleRender() {
+  if (renderTimer) clearTimeout(renderTimer);
+  renderTimer = setTimeout(render, 20);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SHAPE TOGGLE
+// ─────────────────────────────────────────────────────────────────────────────
+function setShape(which, shape) {
+  if (which === 'inner') {
+    innerShape = shape;
+    document.getElementById('inner-shape-square').classList.toggle('active', shape === 'square');
+    document.getElementById('inner-shape-circle').classList.toggle('active', shape === 'circle');
+  } else {
+    outerShape = shape;
+    document.getElementById('outer-shape-square').classList.toggle('active', shape === 'square');
+    document.getElementById('outer-shape-circle').classList.toggle('active', shape === 'circle');
+  }
+  scheduleRender();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SLIDER ↔ NUMBER INPUT SYNC
+// ─────────────────────────────────────────────────────────────────────────────
+function linkControl(sliderId, numId) {
+  var sl  = document.getElementById(sliderId);
+  var num = document.getElementById(numId);
+  var lo = +sl.min, hi = +sl.max;
+  function clamp(v) { return v < lo ? lo : v > hi ? hi : v; }
+
+  sl.addEventListener('input', function() {
+    num.value = sl.value;
+    scheduleRender();
+  });
+  num.addEventListener('input', function() {
+    var v = parseInt(num.value, 10);
+    if (isNaN(v)) return;
+    v = clamp(v); sl.value = v; num.value = v;
+    scheduleRender();
+  });
+  num.addEventListener('blur', function() {
+    var v = parseInt(num.value, 10);
+    if (isNaN(v)) { num.value = sl.value; return; }
+    v = clamp(v); sl.value = v; num.value = v;
+  });
+}
+linkControl('global-opacity', 'global-opacity-num');
+linkControl('inner-size',     'inner-size-num');
+linkControl('inner-soft',     'inner-soft-num');
+linkControl('outer-size',     'outer-size-num');
+linkControl('outer-soft',     'outer-soft-num');
+
+fullresChk.addEventListener('change', scheduleRender);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COLOUR SWATCHES
+// ─────────────────────────────────────────────────────────────────────────────
+var customWrap = document.querySelector('.custom-color-wrap');
+var customInput = document.getElementById('custom-color');
+var allSwatches = document.querySelectorAll('.swatch');
+
+function clearSwatchActive() {
+  allSwatches.forEach(function(x) { x.classList.remove('active'); x.setAttribute('aria-checked','false'); });
+  customWrap.classList.remove('active');
+  customWrap.setAttribute('aria-checked','false');
+}
+
+allSwatches.forEach(function(s) {
+  s.addEventListener('click', function() {
+    clearSwatchActive();
+    s.classList.add('active'); s.setAttribute('aria-checked','true');
+    bgColor = s.dataset.color;
+    redrawPreview();
+  });
+  // keyboard support
+  s.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); s.click(); }
+  });
+});
+
+// Clicking the pill opens the colour picker
+customWrap.addEventListener('click', function(e) {
+  // Don't double-fire if the click landed on the input itself
+  if (e.target !== customInput) customInput.click();
+});
+customWrap.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); customInput.click(); }
+});
+customInput.addEventListener('input', function() {
+  clearSwatchActive();
+  customWrap.classList.add('active'); customWrap.setAttribute('aria-checked','true');
+  bgColor = customInput.value;
+  redrawPreview();
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FILE LOADING
+// ─────────────────────────────────────────────────────────────────────────────
+dropZone.addEventListener('dragover', function(e) {
+  e.preventDefault(); dropZone.classList.add('dragover');
+});
+dropZone.addEventListener('dragleave', function(e) {
+  // Only remove class if leaving the drop zone itself, not a child
+  if (!dropZone.contains(e.relatedTarget)) dropZone.classList.remove('dragover');
+});
+dropZone.addEventListener('drop', function(e) {
+  e.preventDefault(); dropZone.classList.remove('dragover');
+  var file = e.dataTransfer.files[0];
+  if (file) loadFile(file);
+});
+dropZone.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileIn.click(); }
+});
+
+fileIn.addEventListener('change', function() {
+  if (fileIn.files[0]) loadFile(fileIn.files[0]);
+  // Reset so the same file can be re-selected and trigger change again
+  fileIn.value = '';
+});
+
+function loadFile(file) {
+  if (!file) return;
+  // Accept image/* types; also accept files with no type but image-like extensions
+  var isImage = file.type.startsWith('image/') ||
+    /\.(png|jpg|jpeg|webp|gif|bmp|tiff?)$/i.test(file.name);
+  if (!isImage) {
+    alert('Please upload an image file (PNG, JPG, WebP, etc.)');
+    return;
+  }
+  var url = URL.createObjectURL(file);
+  var image = new Image();
+  image.onload = function() {
+    URL.revokeObjectURL(url); // free memory as soon as image is decoded
+    img = image;
+    lastParams = null;
+    buildThumb();
+    controls.style.display = 'flex';
+    previewWrap.style.display = 'block';
+    downloadBtn.style.display = 'block';
+    render();
+  };
+  image.onerror = function() {
+    URL.revokeObjectURL(url);
+    alert('Could not load the image. The file may be corrupt or an unsupported format.');
+  };
+  image.src = url;
+}
+
+// Build persistent low-res thumbnail (clean source for repeated fade passes)
+function buildThumb() {
+  var W = img.naturalWidth, H = img.naturalHeight;
+  var scale = Math.min(1, PREVIEW_MAX / Math.max(W, H));
+  thumbCanvas.width  = Math.round(W * scale);
+  thumbCanvas.height = Math.round(H * scale);
+  thumbCtx.clearRect(0, 0, thumbCanvas.width, thumbCanvas.height);
+  thumbCtx.drawImage(img, 0, 0, thumbCanvas.width, thumbCanvas.height);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+function vn(id) {
+  var v = parseInt(document.getElementById(id).value, 10);
+  return isNaN(v) ? 0 : v;
+}
+
+function smoothstep(a, b, t) {
+  if (b <= a) return t <= a ? 0 : 1;
+  var x = t < a ? 0 : t > b ? 1 : (t - a) / (b - a);
+  return x * x * (3 - 2 * x);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CORE FADE PASS — applies fades to workCanvas using sourceImg as input
+// sourceImg can be an HTMLImageElement or HTMLCanvasElement
+// ─────────────────────────────────────────────────────────────────────────────
+function applyFadesToCanvas(workCanvas, workCtx, sourceImg) {
+  var W = workCanvas.width, H = workCanvas.height;
+  workCtx.clearRect(0, 0, W, H);
+  workCtx.drawImage(sourceImg, 0, 0, W, H);
+
+  var globalOpacity = vn('global-opacity') / 100;
+  var innerSize     = vn('inner-size') / 100;
+  var innerSoft     = Math.min(vn('inner-soft') / 100, 1);
+  var outerSize     = vn('outer-size') / 100;
+  var outerSoft     = Math.min(vn('outer-soft') / 100, 1);
+
+  // Nothing to do — image is unchanged
+  if (innerSize === 0 && outerSize === 0 && globalOpacity === 1) return;
+
+  var data = workCtx.getImageData(0, 0, W, H);
+  var d    = data.data;
+
+  // Alpha lookup table: alphaLUT[i] = round(i * globalOpacity)
+  // Avoids per-pixel float multiply + round for the opacity component
+  var alphaLUT = new Uint8Array(256);
+  for (var i = 0; i < 256; i++) alphaLUT[i] = Math.round(i * globalOpacity);
+
+  // Pre-compute normalised coords and edge distances for every row/column
+  var nyArr = new Float32Array(H);
+  var dyArr = new Float32Array(H);
+  for (var y = 0; y < H; y++) {
+    var ny = H > 1 ? y / (H - 1) : 0.5;
+    nyArr[y] = ny;
+    dyArr[y] = ny < 0.5 ? ny : 1 - ny;
+  }
+  var nxArr = new Float32Array(W);
+  var dxArr = new Float32Array(W);
+  for (var x = 0; x < W; x++) {
+    var nx = W > 1 ? x / (W - 1) : 0.5;
+    nxArr[x] = nx;
+    dxArr[x] = nx < 0.5 ? nx : 1 - nx;
+  }
+
+  // Pre-compute fade constants outside inner loop
+  var iFadeEnd = 0, iFadeStart = 0, reach = 0, outerStart = 0;
+  if (innerSize > 0) {
+    iFadeEnd   = innerSize < 1 ? innerSize * 0.5 : 0.5;
+    iFadeStart = iFadeEnd * (1 - innerSoft);
+  }
+  if (outerSize > 0) {
+    reach      = outerSize < 1 ? outerSize * 0.5 : 0.5;
+    outerStart = reach * (1 - outerSoft);
+  }
+
+  for (var y = 0; y < H; y++) {
+    var ny     = nyArr[y];
+    var dyEdge = dyArr[y];
+    var rowBase = y * W * 4;
+
+    for (var x = 0; x < W; x++) {
+      var idx   = rowBase + x * 4;
+      var origA = d[idx + 3];
+      if (origA === 0) continue; // skip fully-transparent pixels
+
+      var nx     = nxArr[x];
+      var dxEdge = dxArr[x];
+
+      // ── inner fade ──
+      var innerAlpha = 1;
+      if (innerSize > 0) {
+        var iDist;
+        if (innerShape === 'circle') {
+          var icx = nx - 0.5, icy = ny - 0.5;
+          iDist = 0.5 - Math.sqrt(icx * icx + icy * icy);
+          if (iDist < 0) iDist = 0;
+        } else {
+          iDist = dxEdge < dyEdge ? dxEdge : dyEdge;
+        }
+        innerAlpha = smoothstep(iFadeStart, iFadeEnd, iDist);
+      }
+
+      // ── outer fade ──
+      var outerAlpha = 1;
+      if (outerSize > 0) {
+        var oDist;
+        if (outerShape === 'circle') {
+          var ocx = nx - 0.5, ocy = ny - 0.5;
+          oDist = Math.sqrt(ocx * ocx + ocy * ocy);
+        } else {
+          var ax = nx - 0.5; if (ax < 0) ax = -ax;
+          var ay = ny - 0.5; if (ay < 0) ay = -ay;
+          oDist = ax > ay ? ax : ay;
+        }
+        outerAlpha = smoothstep(outerStart, reach, oDist);
+      }
+
+      // ── combine ──
+      var fadeMult = innerAlpha * outerAlpha;
+      if (fadeMult >= 1) {
+        d[idx + 3] = alphaLUT[origA];
+      } else if (fadeMult <= 0) {
+        d[idx + 3] = 0;
+      } else {
+        d[idx + 3] = Math.round(alphaLUT[origA] * fadeMult);
+      }
+    }
+  }
+  workCtx.putImageData(data, 0, 0);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PREVIEW — composites background + faded image directly onto the display canvas
+// No toDataURL bounce; draws directly so the browser doesn't re-decode a PNG
+// ─────────────────────────────────────────────────────────────────────────────
+function redrawPreview() {
+  if (!img) return;
+  var fadedCanvas = fullresChk.checked ? canvas : scratchCanvas;
+  var W = fadedCanvas.width, H = fadedCanvas.height;
+
+  dispCanvas.width  = W;
+  dispCanvas.height = H;
+  dispCanvas.style.width  = '100%';
+  dispCanvas.style.height = 'auto';
+
+  if (bgColor === 'checker') {
+    var sz = Math.max(8, Math.round(Math.min(W, H) / 40));
+    for (var py = 0; py < H; py += sz) {
+      for (var px = 0; px < W; px += sz) {
+        dispCtx.fillStyle = ((Math.floor(px / sz) + Math.floor(py / sz)) % 2 === 0) ? '#555' : '#2a2a2a';
+        dispCtx.fillRect(px, py, sz, sz);
+      }
+    }
+  } else {
+    dispCtx.fillStyle = bgColor;
+    dispCtx.fillRect(0, 0, W, H);
+  }
+
+  dispCtx.drawImage(fadedCanvas, 0, 0);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PARAM SNAPSHOT — skip redundant full-res background passes
+// ─────────────────────────────────────────────────────────────────────────────
+function getParams() {
+  return vn('global-opacity') + '|' + vn('inner-size') + '|' + vn('inner-soft') + '|' +
+         vn('outer-size')     + '|' + vn('outer-soft') + '|' + innerShape + '|' + outerShape;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MAIN RENDER
+// ─────────────────────────────────────────────────────────────────────────────
+function render() {
+  if (!img) return;
+
+  var currentParams = getParams();
+
+  if (fullresChk.checked) {
+    // Full-res preview: process at native resolution
+    canvas.width  = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    applyFadesToCanvas(canvas, ctx, img);
+    lastParams = currentParams;
+    redrawPreview();
+  } else {
+    // Low-res preview: process the thumb
+    scratchCanvas.width  = thumbCanvas.width;
+    scratchCanvas.height = thumbCanvas.height;
+    applyFadesToCanvas(scratchCanvas, scratchCtx, thumbCanvas);
+    redrawPreview();
+
+    // Background full-res update (for download), only if params changed
+    if (currentParams !== lastParams) {
+      lastParams = currentParams;
+      requestAnimationFrame(function() {
+        canvas.width  = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        applyFadesToCanvas(canvas, ctx, img);
+      });
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DOWNLOAD — always full resolution, never includes the preview background
+// ─────────────────────────────────────────────────────────────────────────────
+downloadBtn.addEventListener('click', function() {
+  if (!img) return;
+  downloadBtn.disabled    = true;
+  downloadBtn.textContent = 'Processing…';
+
+  // Synchronously apply fades at full resolution onto canvas
+  canvas.width  = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  applyFadesToCanvas(canvas, ctx, img);
+  // canvas now contains only the faded image with no background — export directly
+  canvas.toBlob(function(blob) {
+    if (!blob) {
+      alert('Export failed. Try again or use a smaller image.');
+      downloadBtn.disabled    = false;
+      downloadBtn.textContent = '⬇ Download PNG';
+      return;
+    }
+    var url = URL.createObjectURL(blob);
+    var a   = document.createElement('a');
+    a.href  = url; a.download = 'faded.png';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function() { URL.revokeObjectURL(url); }, 2000);
+    downloadBtn.disabled    = false;
+    downloadBtn.textContent = '⬇ Download PNG';
+  }, 'image/png');
+});
+</script>
+</body>
+</html>
