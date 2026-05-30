@@ -2,6 +2,8 @@
 
 A lightweight, browser-based tool for applying inner and outer fade effects to images, exported as transparent PNGs. No install, no server, no dependencies — just open the HTML file.
 
+See it live [here](https://pngfade.shefski.com/)
+
 ## Features
 
 - **Inner fade** — edges fade inward to transparent, with adjustable size and softness
